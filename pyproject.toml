@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nicto"
+version = "0.1.0"
+authors = [
+    { name = "Víctor Vázquez", email = "victorvazrod@ugr.es" },
+    { name = "Fernando Valdivia", email = "f.valdivia@ugr.es" }
+]
+requires-python = ">=3.12"
+
+[dependency-groups]
+dev = [
+    "hatchling>=1.31.0",
+    "mypy>=2.3.0",
+    "ruff>=0.16.0",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "ALL",
+]
+ignore = [
+    "D100",
+    "D104",
+    "D107",
+    "CPY001",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*"]

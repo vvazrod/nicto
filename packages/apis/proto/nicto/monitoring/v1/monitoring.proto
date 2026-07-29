@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package nicto.monitoring.v1;
+
+service MonitoringService {
+
+}

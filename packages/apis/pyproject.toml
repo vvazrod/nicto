@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nicto-apis"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Víctor Vázquez", email = "victorvazrod@ugr.es" },
+    { name = "Fernando Valdivia", email = "f.valdivia@ugr.es" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "betterproto2[all]==0.10.*",
+    "grpclib[protobuf]>=0.4.9",
+]
+
+[dependency-groups]
+dev = [
+    "betterproto2-compiler==0.10.*",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nicto"]
+
+[tool.ruff.lint]
+exclude = ["_internal"]

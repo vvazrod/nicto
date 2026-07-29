@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package nicto.scheduling.v1;
+
+service SchedulingService {
+    rpc AddStream (AddStreamRequest) returns (AddStreamResponse);
+}
+
+message AddStreamRequest {
+    string src_mac = 1;
+    string dst_mac = 2;
+    int32 vlan_id = 3;
+    int32 priority = 4;
+    int32 max_frame_size = 5;
+    int32 max_num_frames = 6;
+    int32 measurement_interval = 7;
+    int64 deadline = 8;
+}
+
+message AddStreamResponse {
+    Status status = 1;
+
+    enum Status {
+        STATUS_UNSPECIFIED = 0;
+        STATUS_SUCCESS = 1;
+        STATUS_BAD_REQUEST = 2;
+        STATUS_UNFEASIBLE = 3;
+    }
+}
