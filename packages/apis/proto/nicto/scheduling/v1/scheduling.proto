@@ -9,21 +9,23 @@ service SchedulingService {
 message AddStreamRequest {
     string src_mac = 1;
     string dst_mac = 2;
-    int32 vlan_id = 3;
-    int32 priority = 4;
-    int32 max_frame_size = 5;
-    int32 max_num_frames = 6;
-    int32 measurement_interval = 7;
+    int64 vlan = 3;
+    int64 priority = 4;
+    int64 max_frame_size = 5;
+    int64 max_num_frames = 6;
+    int64 measurement_interval = 7;
     int64 deadline = 8;
 }
 
 message AddStreamResponse {
-    Status status = 1;
+    int64 start_time = 1;
+    Status status = 2;
 
     enum Status {
         STATUS_UNSPECIFIED = 0;
         STATUS_SUCCESS = 1;
         STATUS_BAD_REQUEST = 2;
         STATUS_UNFEASIBLE = 3;
+        STATUS_NODE_NOT_FOUND = 4;
     }
 }

@@ -13,8 +13,11 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "betterproto2[all]==0.10.*",
-    "grpclib[protobuf]>=0.4.9",
+    "betterproto2==0.10.*",
+    "grpcio>=1.83.0",
+    "grpclib>=0.4.9",
+    "protobuf>=7.35.1",
+    "pydantic>=2.13.4",
 ]
 
 [dependency-groups]
