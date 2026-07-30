@@ -35,20 +35,17 @@ class AddStreamResponseStatus(betterproto2.Enum):
 
     SUCCESS = 1
 
-    BAD_REQUEST = 2
+    UNFEASIBLE = 2
 
-    UNFEASIBLE = 3
-
-    NODE_NOT_FOUND = 4
+    PORT_NOT_FOUND = 3
 
     @classmethod
     def betterproto_value_to_renamed_proto_names(cls) -> dict[int, str]:
         return {
             0: "STATUS_UNSPECIFIED",
             1: "STATUS_SUCCESS",
-            2: "STATUS_BAD_REQUEST",
-            3: "STATUS_UNFEASIBLE",
-            4: "STATUS_NODE_NOT_FOUND",
+            2: "STATUS_UNFEASIBLE",
+            3: "STATUS_PORT_NOT_FOUND",
         }
 
     @classmethod
@@ -56,44 +53,35 @@ class AddStreamResponseStatus(betterproto2.Enum):
         return {
             "STATUS_UNSPECIFIED": 0,
             "STATUS_SUCCESS": 1,
-            "STATUS_BAD_REQUEST": 2,
-            "STATUS_UNFEASIBLE": 3,
-            "STATUS_NODE_NOT_FOUND": 4,
+            "STATUS_UNFEASIBLE": 2,
+            "STATUS_PORT_NOT_FOUND": 3,
         }
 
 
 @dataclass(eq=False, repr=False, config={"extra": "forbid"})
 class AddStreamRequest(betterproto2.Message):
-    src_mac: "typing.Annotated[str, pydantic.AfterValidator(betterproto2.validators.validate_string)]" = betterproto2.field(
+    src_mac_address: "typing.Annotated[str, pydantic.AfterValidator(betterproto2.validators.validate_string)]" = betterproto2.field(
         1, betterproto2.TYPE_STRING
     )
 
-    dst_mac: "typing.Annotated[str, pydantic.AfterValidator(betterproto2.validators.validate_string)]" = betterproto2.field(
+    dst_mac_address: "typing.Annotated[str, pydantic.AfterValidator(betterproto2.validators.validate_string)]" = betterproto2.field(
         2, betterproto2.TYPE_STRING
     )
 
-    vlan: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = (
+    max_frame_size: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = (
         betterproto2.field(3, betterproto2.TYPE_INT64)
     )
 
-    priority: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = (
-        betterproto2.field(4, betterproto2.TYPE_INT64)
+    max_interval_frames: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = betterproto2.field(
+        4, betterproto2.TYPE_INT64
     )
 
-    max_frame_size: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = (
+    interval: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = (
         betterproto2.field(5, betterproto2.TYPE_INT64)
     )
 
-    max_num_frames: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = (
+    max_latency: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = (
         betterproto2.field(6, betterproto2.TYPE_INT64)
-    )
-
-    measurement_interval: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = betterproto2.field(
-        7, betterproto2.TYPE_INT64
-    )
-
-    deadline: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = (
-        betterproto2.field(8, betterproto2.TYPE_INT64)
     )
 
 
@@ -104,12 +92,20 @@ default_message_pool.register_message(
 
 @dataclass(eq=False, repr=False, config={"extra": "forbid"})
 class AddStreamResponse(betterproto2.Message):
-    start_time: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = (
+    vlan: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = (
         betterproto2.field(1, betterproto2.TYPE_INT64)
     )
 
+    priority: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = (
+        betterproto2.field(2, betterproto2.TYPE_INT64)
+    )
+
+    start_time: "typing.Annotated[int, pydantic.Field(ge=-2**63, le=2**63 - 1)]" = (
+        betterproto2.field(3, betterproto2.TYPE_INT64)
+    )
+
     status: "AddStreamResponseStatus" = betterproto2.field(
-        2, betterproto2.TYPE_ENUM, default_factory=lambda: AddStreamResponseStatus(0)
+        4, betterproto2.TYPE_ENUM, default_factory=lambda: AddStreamResponseStatus(0)
     )
 
 

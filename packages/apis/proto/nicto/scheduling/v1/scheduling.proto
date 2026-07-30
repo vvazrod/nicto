@@ -7,25 +7,24 @@ service SchedulingService {
 }
 
 message AddStreamRequest {
-    string src_mac = 1;
-    string dst_mac = 2;
-    int64 vlan = 3;
-    int64 priority = 4;
-    int64 max_frame_size = 5;
-    int64 max_num_frames = 6;
-    int64 measurement_interval = 7;
-    int64 deadline = 8;
+    string src_mac_address = 1;
+    string dst_mac_address = 2;
+    int64 max_frame_size = 3;
+    int64 max_interval_frames = 4;
+    int64 interval = 5;
+    int64 max_latency = 6;
 }
 
 message AddStreamResponse {
-    int64 start_time = 1;
-    Status status = 2;
+    int64 vlan = 1;
+    int64 priority = 2;
+    int64 start_time = 3;
+    Status status = 4;
 
     enum Status {
         STATUS_UNSPECIFIED = 0;
         STATUS_SUCCESS = 1;
-        STATUS_BAD_REQUEST = 2;
-        STATUS_UNFEASIBLE = 3;
-        STATUS_NODE_NOT_FOUND = 4;
+        STATUS_UNFEASIBLE = 2;
+        STATUS_PORT_NOT_FOUND = 3;
     }
 }

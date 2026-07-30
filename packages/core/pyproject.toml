@@ -15,7 +15,10 @@ requires-python = ">=3.12"
 dependencies = [
     "aiosqlite>=0.22.1",
     "grpclib[protobuf]>=0.4.9",
+    "httpx>=0.28.1",
     "nicto-apis",
+    "pydantic>=2.13.4",
+    "pydantic-extra-types>=2.11.1",
     "sqlalchemy[asyncio]>=2.0.51",
 ]
 
@@ -27,3 +30,6 @@ packages = ["src/nicto"]
 
 [tool.uv.sources]
 nicto-apis = { workspace = true }
+
+[dependency-groups]
+dev = []
