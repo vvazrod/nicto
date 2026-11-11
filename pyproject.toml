@@ -7,17 +7,40 @@ name = "nicto"
 version = "0.1.0"
 authors = [
     { name = "Víctor Vázquez", email = "victorvazrod@ugr.es" },
-    { name = "Fernando Valdivia", email = "f.valdivia@ugr.es" }
+    { name = "Fernando Valdivia del Rosal", email = "f.valdivia@ugr.es" },
+    { name = "Begoña del Pino", email = "bpino@ugr.es" }
 ]
 requires-python = ">=3.12"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "fastapi>=0.162.2",
+    "pydantic>=2.14.3",
+    "pydantic-extra-types>=2.11.1",
+    "sqlalchemy[asyncio]>=2.1.8",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+nicto = "nicto.main:app"
 
 [dependency-groups]
 dev = [
     "hatchling>=1.31.0",
     "mypy>=2.3.0",
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.1.post1",
     "ruff>=0.16.0",
 ]
+
+[tool.pytest]
+addopts = ["--import-mode=importlib"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+
+[tool.mypy]
+explicit_package_bases = true
+mypy_path = ["src", "."]
 
 [tool.ruff]
 line-length = 120
@@ -33,8 +56,8 @@ ignore = [
     "CPY001",
 ]
 
-[tool.uv]
-package = false
-
-[tool.uv.workspace]
-members = ["packages/*"]
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "INP001",  # implicit-namespace-package
+    "S101",  # assert
+]
