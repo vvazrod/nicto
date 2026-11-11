@@ -3,7 +3,7 @@ from pydantic_extra_types.mac_address import MacAddress
 
 from nicto.adapters.solvers.flexcurve import FlexcurveSolver
 from nicto.application.use_cases.insert_stream import StreamUnfeasibleError
-from nicto.config import Config, SchedulingProfile
+from nicto.config import Config, FlexcurveSolverProfile
 from nicto.domain.models import Allocation, Hop, Link, Port, Stream
 
 CONFIG = Config(hyperperiod=20_000, tick_granularity=1_000)
@@ -56,7 +56,7 @@ def test_max_throughput_uses_the_first_feasible_gaps() -> None:
     """Test the stream is placed back to back on the earliest gaps, ignoring ingress ports."""
     existing = [_busy(STREAM, 1, 0, 3), _busy(STREAM, 2, 0, 15), _busy(STREAM, 3, 0, 2)]
 
-    allocations = FlexcurveSolver(SchedulingProfile.MAX_THROUGHPUT).find_schedule(STREAM, _path(existing), CONFIG)
+    allocations = FlexcurveSolver(FlexcurveSolverProfile.MAX_THROUGHPUT).find_schedule(STREAM, _path(existing), CONFIG)
 
     assert _starts(allocations) == {str(_mac(1)): 3, str(_mac(3)): 5}
     assert {a.num_slots for a in allocations} == {2}
@@ -66,8 +66,10 @@ def test_min_latency_skips_to_a_later_start_with_lower_latency() -> None:
     """Test shifting the first hop shortens the end-to-end latency."""
     existing = [_busy(STREAM, 3, 0, 10), _busy(STREAM, 1, 10, 2)]
 
-    max_throughput = FlexcurveSolver(SchedulingProfile.MAX_THROUGHPUT).find_schedule(STREAM, _path(existing), CONFIG)
-    min_latency = FlexcurveSolver(SchedulingProfile.MIN_LATENCY).find_schedule(STREAM, _path(existing), CONFIG)
+    max_throughput = FlexcurveSolver(FlexcurveSolverProfile.MAX_THROUGHPUT).find_schedule(
+        STREAM, _path(existing), CONFIG,
+    )
+    min_latency = FlexcurveSolver(FlexcurveSolverProfile.MIN_LATENCY).find_schedule(STREAM, _path(existing), CONFIG)
 
     assert _starts(max_throughput) == {str(_mac(1)): 0, str(_mac(3)): 10}
     assert _starts(min_latency) == {str(_mac(1)): 8, str(_mac(3)): 10}

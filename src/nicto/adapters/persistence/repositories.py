@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from nicto.adapters.persistence.models import LinkModel, NodeModel, PortModel
+from nicto.adapters.persistence.models import AllocationModel, LinkModel, NodeModel, PortModel, StreamModel
 from nicto.application.ports import NetworkRepository, StreamRepository
 from nicto.domain.models import Allocation, Link, Node, Port, Stream
 
@@ -102,5 +102,26 @@ class SqlaStreamRepository(StreamRepository):
         self._session = session
 
     async def create_stream(self, stream: Stream) -> Stream:
-        """Persist a scheduled stream."""
-        raise NotImplementedError
+        """Persist a scheduled stream and its allocations."""
+        stream_model = StreamModel(
+            id=stream.id,
+            src_mac_address=str(stream.src_mac_address),
+            dst_mac_address=str(stream.dst_mac_address),
+            vlan=stream.vlan,
+            priority=stream.priority,
+            max_frame_size=stream.max_frame_size,
+            max_interval_frames=stream.max_interval_frames,
+            interval=stream.interval,
+            max_latency=stream.max_latency,
+            allocations=[
+                AllocationModel(
+                    port_mac_address=str(allocation.port_mac_address),
+                    start_idx=allocation.start_idx,
+                    num_slots=allocation.num_slots,
+                )
+                for allocation in stream.allocations
+            ],
+        )
+        self._session.add(stream_model)
+        await self._session.flush()
+        return stream

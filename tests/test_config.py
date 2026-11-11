@@ -1,6 +1,6 @@
 import pytest
 
-from nicto.config import Config, SchedulingProfile
+from nicto.config import Config, FlexcurveSolverProfile
 
 TOTAL_SLOTS = 10
 
@@ -53,10 +53,10 @@ def test_from_env_reads_solver_selection() -> None:
 
     config = Config.from_env(environment)
     assert (config.path_solver, config.schedule_solver) == ("dijkstra", "flexcurve")
-    assert config.schedule_profile == SchedulingProfile.MAX_THROUGHPUT
+    assert config.schedule_profile == FlexcurveSolverProfile.MAX_THROUGHPUT
 
     config = Config.from_env({**environment, "NICTO_SCHEDULE_PROFILE": "min_latency"})
-    assert config.schedule_profile == SchedulingProfile.MIN_LATENCY
+    assert config.schedule_profile == FlexcurveSolverProfile.MIN_LATENCY
 
     with pytest.raises(ValueError, match="NICTO_SCHEDULE_PROFILE"):
         Config.from_env({**environment, "NICTO_SCHEDULE_PROFILE": "fast"})
