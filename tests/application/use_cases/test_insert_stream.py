@@ -9,7 +9,13 @@ from nicto.application.use_cases.insert_stream import (
 )
 from nicto.config import Config
 from nicto.domain.models import Link, Node, Port, Stream
-from tests.application.use_cases.conftest import MockNetworkRepository, MockStreamRepository, MockUnitOfWork
+from tests.application.use_cases.conftest import (
+    MockNetworkRepository,
+    MockPathSolver,
+    MockScheduleSolver,
+    MockStreamRepository,
+    MockUnitOfWork,
+)
 
 SOURCE_NODE = Node(
     hostname="source",
@@ -40,10 +46,19 @@ def test_execute_retrieves_stream_endpoints_before_persisting(
     network_repository: MockNetworkRepository,
     stream_repository: MockStreamRepository,
     unit_of_work: MockUnitOfWork,
+    path_solver: MockPathSolver,
+    schedule_solver: MockScheduleSolver,
 ) -> None:
     """Test stream insertion looks up both endpoint ports."""
     network_repository.nodes = [SOURCE_NODE, DESTINATION_NODE]
-    use_case = InsertStreamUseCase(network_repository, stream_repository, unit_of_work, CONFIG)
+    use_case = InsertStreamUseCase(
+        network_repository,
+        stream_repository,
+        unit_of_work,
+        path_solver,
+        schedule_solver,
+        CONFIG,
+    )
 
     result = asyncio.run(use_case.execute(STREAM))
 
@@ -60,10 +75,19 @@ def test_execute_raises_when_an_endpoint_port_is_missing(
     network_repository: MockNetworkRepository,
     stream_repository: MockStreamRepository,
     unit_of_work: MockUnitOfWork,
+    path_solver: MockPathSolver,
+    schedule_solver: MockScheduleSolver,
 ) -> None:
     """Test a stream with a missing endpoint port is not persisted."""
     network_repository.nodes = [SOURCE_NODE, DESTINATION_NODE]
-    use_case = InsertStreamUseCase(network_repository, stream_repository, unit_of_work, CONFIG)
+    use_case = InsertStreamUseCase(
+        network_repository,
+        stream_repository,
+        unit_of_work,
+        path_solver,
+        schedule_solver,
+        CONFIG,
+    )
     stream = STREAM.model_copy(update={"dst_mac_address": "00:11:22:33:44:57"})
 
     with pytest.raises(PortNotFoundError, match="source or destination port"):

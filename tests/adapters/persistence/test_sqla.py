@@ -78,3 +78,15 @@ async def test_get_port_by_mac_returns_none_when_not_found(db_session: AsyncSess
     port = await repository.get_port_by_mac(MacAddress("00:11:22:33:44:55"))
 
     assert port is None
+
+
+async def test_get_topology(db_session: AsyncSession) -> None:
+    """Test retrieving all nodes and links."""
+    repository = SqlaNetworkRepository(db_session)
+    await repository.create_node(NODE)
+    await repository.create_link(LINK)
+
+    nodes, links = await repository.get_topology()
+
+    assert nodes == [NODE]
+    assert links == [LINK]

@@ -1,8 +1,17 @@
+# ruff: noqa: ARG002
 import pytest
 from pydantic_extra_types.mac_address import MacAddress
 
-from nicto.application.ports import NetworkController, NetworkRepository, StreamRepository, UnitOfWork
-from nicto.domain.models import Link, Node, Port, Stream
+from nicto.application.ports import (
+    NetworkController,
+    NetworkRepository,
+    PathSolver,
+    ScheduleSolver,
+    StreamRepository,
+    UnitOfWork,
+)
+from nicto.config import Config
+from nicto.domain.models import Allocation, Hop, Link, Node, Port, Stream
 
 
 class MockNetworkRepository(NetworkRepository):
@@ -38,6 +47,10 @@ class MockNetworkRepository(NetworkRepository):
                     return port
         return None
 
+    async def get_topology(self) -> tuple[list[Node], list[Link]]:
+        """Return the stored nodes and links."""
+        return self.nodes, self.links
+
 
 class MockStreamRepository(StreamRepository):
     """Mock stream repository that records persisted streams."""
@@ -72,6 +85,45 @@ class MockNetworkController(NetworkController):
     async def get_topology(self) -> tuple[list[Node], list[Link]]:
         """Get the configured topology."""
         return self.nodes, self.links
+
+
+class MockPathSolver(PathSolver):
+    """Mock path solver that returns a configurable path."""
+
+    def __init__(self) -> None:
+        self.path: list[Hop] = []
+
+    def find_path(self, stream: Stream, nodes: list[Node], links: list[Link]) -> list[Hop]:
+        """Return the configured path."""
+        return self.path
+
+
+class MockScheduleSolver(ScheduleSolver):
+    """Mock schedule solver that returns configurable allocations."""
+
+    def __init__(self) -> None:
+        self.allocations: list[Allocation] = []
+
+    def find_schedule(
+        self,
+        stream: Stream,
+        path: list[Hop],
+        config: Config,
+    ) -> list[Allocation]:
+        """Return the configured allocations."""
+        return self.allocations
+
+
+@pytest.fixture
+def path_solver() -> MockPathSolver:
+    """Mock path solver."""
+    return MockPathSolver()
+
+
+@pytest.fixture
+def schedule_solver() -> MockScheduleSolver:
+    """Mock schedule solver."""
+    return MockScheduleSolver()
 
 
 @pytest.fixture

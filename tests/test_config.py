@@ -1,6 +1,6 @@
 import pytest
 
-from nicto.config import Config
+from nicto.config import Config, SchedulingProfile
 
 TOTAL_SLOTS = 10
 
@@ -41,3 +41,24 @@ def test_from_env_reads_database_url() -> None:
     assert Config.from_env(environment).database_url == "sqlite+aiosqlite:///:memory:"
     environment["NICTO_DATABASE_URL"] = "sqlite+aiosqlite:///nicto.db"
     assert Config.from_env(environment).database_url == "sqlite+aiosqlite:///nicto.db"
+
+
+def test_from_env_reads_solver_selection() -> None:
+    """Test solvers and schedule profile have defaults and reject unknown values."""
+    environment = {
+        "NICTO_HYPERPERIOD": "10000",
+        "NICTO_TICK_GRANULARITY": "1000",
+        "NICTO_TOPOLOGY_PATH": "topology.json",
+    }
+
+    config = Config.from_env(environment)
+    assert (config.path_solver, config.schedule_solver) == ("dijkstra", "flexcurve")
+    assert config.schedule_profile == SchedulingProfile.MAX_THROUGHPUT
+
+    config = Config.from_env({**environment, "NICTO_SCHEDULE_PROFILE": "min_latency"})
+    assert config.schedule_profile == SchedulingProfile.MIN_LATENCY
+
+    with pytest.raises(ValueError, match="NICTO_SCHEDULE_PROFILE"):
+        Config.from_env({**environment, "NICTO_SCHEDULE_PROFILE": "fast"})
+    with pytest.raises(ValueError, match="NICTO_PATH_SOLVER"):
+        Config.from_env({**environment, "NICTO_PATH_SOLVER": "unknown"})

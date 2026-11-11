@@ -1,4 +1,10 @@
-from nicto.application.ports import NetworkRepository, StreamRepository, UnitOfWork
+from nicto.application.ports import (
+    NetworkRepository,
+    PathSolver,
+    ScheduleSolver,
+    StreamRepository,
+    UnitOfWork,
+)
 from nicto.config import Config
 from nicto.domain.models import Stream
 
@@ -18,16 +24,20 @@ class StreamUnfeasibleError(Exception):
 class InsertStreamUseCase:
     """Validate stream endpoint ports and persist requested streams."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         network_repository: NetworkRepository,
         stream_repository: StreamRepository,
         unit_of_work: UnitOfWork,
+        path_solver: PathSolver,
+        schedule_solver: ScheduleSolver,
         config: Config,
     ) -> None:
         self._network_repository = network_repository
         self._stream_repository = stream_repository
         self._unit_of_work = unit_of_work
+        self._path_solver = path_solver
+        self._schedule_solver = schedule_solver
         self._config = config
 
     async def execute(self, stream: Stream) -> Stream:
@@ -41,7 +51,12 @@ class InsertStreamUseCase:
 
         self._validate_schedule_alignment(stream)
 
-        created_stream = await self._stream_repository.create_stream(stream)
+        nodes, links = await self._network_repository.get_topology()
+        path = self._path_solver.find_path(stream, nodes, links)
+        allocations = self._schedule_solver.find_schedule(stream, path, self._config)
+        scheduled_stream = stream.model_copy(update={"allocations": allocations})
+
+        created_stream = await self._stream_repository.create_stream(scheduled_stream)
         await self._unit_of_work.commit()
         return created_stream
 

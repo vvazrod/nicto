@@ -1,14 +1,29 @@
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 DEFAULT_GRPC_SERVER_ADDRESS = "127.0.0.1"
 DEFAULT_GRPC_SERVER_PORT = 50051
 DEFAULT_NETWORK = "simulated"
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+DEFAULT_PATH_SOLVER = "dijkstra"
+DEFAULT_SCHEDULE_SOLVER = "flexcurve"
+SUPPORTED_PATH_SOLVERS = frozenset({DEFAULT_PATH_SOLVER})
+SUPPORTED_SCHEDULE_SOLVERS = frozenset({DEFAULT_SCHEDULE_SOLVER})
 MIN_GRPC_SERVER_PORT = 1
 MAX_GRPC_SERVER_PORT = 65535
+
+
+class FlexcurveSolverProfile(StrEnum):
+    """Allocation strategy followed by the Flexcurve schedule solver."""
+
+    MAX_THROUGHPUT = "max_throughput"
+    MIN_LATENCY = "min_latency"
+
+
+DEFAULT_FLEXCURVE_SOLVER_PROFILE = FlexcurveSolverProfile.MAX_THROUGHPUT
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +37,9 @@ class Config:
     network: str = DEFAULT_NETWORK
     topology_path: Path | None = None
     database_url: str = DEFAULT_DATABASE_URL
+    path_solver: str = DEFAULT_PATH_SOLVER
+    schedule_solver: str = DEFAULT_SCHEDULE_SOLVER
+    schedule_profile: FlexcurveSolverProfile = DEFAULT_FLEXCURVE_SOLVER_PROFILE
 
     def __post_init__(self) -> None:
         """Validate schedule dimensions and derive an integral slot count."""
@@ -58,6 +76,14 @@ class Config:
             network=network,
             topology_path=_read_topology_path(environment),
             database_url=_read_database_url(environment),
+            path_solver=_read_choice(environment, "NICTO_PATH_SOLVER", DEFAULT_PATH_SOLVER, SUPPORTED_PATH_SOLVERS),
+            schedule_solver=_read_choice(
+                environment,
+                "NICTO_SCHEDULE_SOLVER",
+                DEFAULT_SCHEDULE_SOLVER,
+                SUPPORTED_SCHEDULE_SOLVERS,
+            ),
+            schedule_profile=_read_schedule_profile(environment),
         )
 
 
@@ -136,3 +162,21 @@ def _read_topology_path(environment: Mapping[str, str]) -> Path:
         msg = "NICTO_TOPOLOGY_PATH must be set"
         raise ValueError(msg)
     return Path(topology_path)
+
+
+def _read_choice(environment: Mapping[str, str], name: str, default: str, choices: frozenset[str]) -> str:
+    value = environment.get(name, default).strip()
+    if value not in choices:
+        msg = f"{name} must be one of: {', '.join(sorted(choices))}"
+        raise ValueError(msg)
+    return value
+
+
+def _read_schedule_profile(environment: Mapping[str, str]) -> FlexcurveSolverProfile:
+    value = environment.get("NICTO_SCHEDULE_PROFILE", DEFAULT_FLEXCURVE_SOLVER_PROFILE.value).strip()
+    try:
+        return FlexcurveSolverProfile(value)
+    except ValueError as error:
+        choices = ", ".join(profile.value for profile in FlexcurveSolverProfile)
+        msg = f"NICTO_SCHEDULE_PROFILE must be one of: {choices}"
+        raise ValueError(msg) from error

@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 
 from pydantic_extra_types.mac_address import MacAddress
 
-from nicto.domain.models import Link, Node, Port, Stream
+from nicto.config import Config
+from nicto.domain.models import Allocation, Hop, Link, Node, Port, Stream
 
 
 class NetworkRepository(ABC):
@@ -19,6 +20,10 @@ class NetworkRepository(ABC):
     @abstractmethod
     async def get_port_by_mac(self, mac_address: MacAddress) -> Port | None:
         """Retrieve a network port identified by its MAC address, if present."""
+
+    @abstractmethod
+    async def get_topology(self) -> tuple[list[Node], list[Link]]:
+        """Retrieve all persisted nodes, with their ports' allocations, and links."""
 
 
 class StreamRepository(ABC):
@@ -43,3 +48,27 @@ class NetworkController(ABC):
     @abstractmethod
     async def get_topology(self) -> tuple[list[Node], list[Link]]:
         """Get the network topology."""
+
+
+class PathSolver(ABC):
+    """Abstract base class for path solvers."""
+
+    @abstractmethod
+    def find_path(self, stream: Stream, nodes: list[Node], links: list[Link]) -> list[Hop]:
+        """Find a feasible path for a stream in a topology, as ordered hops from source to destination.
+
+        Each hop holds the egress port, with its existing allocations, and the link it transmits on.
+        """
+
+
+class ScheduleSolver(ABC):
+    """Abstract base class for schedule solvers."""
+
+    @abstractmethod
+    def find_schedule(
+        self,
+        stream: Stream,
+        path: list[Hop],
+        config: Config,
+    ) -> list[Allocation]:
+        """Find feasible allocations for a stream along a path, given the allocations of its egress ports."""

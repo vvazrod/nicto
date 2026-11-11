@@ -16,6 +16,9 @@ The gRPC server reads these environment variables when `nicto` starts:
 | `NICTO_SERVER_PORT` | `8000` | |
 | `NICTO_NETWORK_CONTROLLER` | `in-memory` | |
 | `NICTO_DATABASE_URL` | `sqlite+aiosqlite:///:memory:` | SQLAlchemy async database URL, e.g. `sqlite+aiosqlite:///nicto.db` for a file. |
+| `NICTO_PATH_SOLVER` | `dijkstra` | Path solver. |
+| `NICTO_SCHEDULE_SOLVER` | `flexcurve` | Schedule solver. |
+| `NICTO_SCHEDULE_PROFILE` | `max_throughput` | `max_throughput` takes the first feasible gaps; `min_latency` searches for the lowest end-to-end latency. |
 | `NICTO_IN_MEMORY_TOPOLOGY_PATH` | — | Required when `NICTO_NETWORK_CONTROLLER=in-memory`. |
 
 The in-memory topology file contains `bridges`, `nodes`, and `links` arrays.

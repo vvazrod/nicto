@@ -54,6 +54,32 @@ class SqlaNetworkRepository(NetworkRepository):
         if port_model is None:
             return None
 
+        return self._to_port(port_model)
+
+    async def get_topology(self) -> tuple[list[Node], list[Link]]:
+        """Retrieve all nodes, with their ports' allocations, and links."""
+        node_models = await self._session.scalars(
+            select(NodeModel).options(selectinload(NodeModel.ports).selectinload(PortModel.allocations)),
+        )
+        link_models = await self._session.scalars(select(LinkModel))
+        nodes = [
+            Node(hostname=node_model.hostname, ports=[self._to_port(port) for port in node_model.ports])
+            for node_model in node_models
+        ]
+        links = [
+            Link(
+                port_a_mac_address=MacAddress(link_model.port_a_mac_address),
+                port_b_mac_address=MacAddress(link_model.port_b_mac_address),
+                speed=link_model.speed,
+                propagation_delay=link_model.propagation_delay,
+            )
+            for link_model in link_models
+        ]
+        return nodes, links
+
+    @staticmethod
+    def _to_port(port_model: PortModel) -> Port:
+        """Convert a port model, whose allocations are loaded, to a domain port."""
         return Port(
             mac_address=MacAddress(port_model.mac_address),
             name=port_model.name,

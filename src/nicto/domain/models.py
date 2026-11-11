@@ -110,3 +110,10 @@ class Gap(BaseModel):
 
     start_idx: int = Field(ge=0)
     num_slots: int = Field(gt=0)
+
+
+class Hop(BaseModel):
+    """A step of a path: the port that transmits a stream and the link it transmits on."""
+
+    port: Port
+    link: Link
