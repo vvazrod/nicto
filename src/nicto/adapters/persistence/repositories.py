@@ -48,6 +48,7 @@ class SqlaNetworkRepository(NetworkRepository):
             select(PortModel)
             .options(selectinload(PortModel.allocations))
             .where(PortModel.mac_address == str(mac_address))
+            .execution_options(populate_existing=True)
         )
         port_model = await self._session.scalar(query)
 

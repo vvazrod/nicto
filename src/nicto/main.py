@@ -9,9 +9,10 @@ from nicto.adapters.network.factory import create_network_controller
 from nicto.adapters.persistence.database import create_engine, create_session_factory, reset_schema
 from nicto.adapters.persistence.repositories import SqlaNetworkRepository
 from nicto.adapters.persistence.unit_of_work import SqlaUnitOfWork
+from nicto.adapters.presentation.factory import create_flexcurve_publisher
 from nicto.application.use_cases.load_network import LoadNetworkUseCase
 from nicto.config import Config
-from nicto.dependencies import register_dependencies
+from nicto.dependencies import provide_flexcurve_publication, register_dependencies
 
 
 def _create_lifespan(config: Config | None) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
@@ -20,6 +21,7 @@ def _create_lifespan(config: Config | None) -> Callable[[FastAPI], AbstractAsync
         """Create the database schema and load the network topology into it on startup."""
         resolved_config = Config.from_env() if config is None else config
         engine = create_engine(resolved_config.database_url)
+        publisher = create_flexcurve_publisher(resolved_config)
         try:
             # Reset schema (drop + create) to ensure clean state
             await reset_schema(engine)
@@ -33,11 +35,17 @@ def _create_lifespan(config: Config | None) -> Callable[[FastAPI], AbstractAsync
                     controller=create_network_controller(resolved_config),
                     unit_of_work=SqlaUnitOfWork(session),
                 ).execute()
+                publication = provide_flexcurve_publication(session, resolved_config, publisher)
+                if publication is not None:
+                    await publication.publish_all()
 
             app.state.config = resolved_config
             app.state.session_factory = session_factory
+            app.state.flexcurve_publisher = publisher
             yield
         finally:
+            if publisher is not None:
+                await publisher.close()
             await engine.dispose()
 
     return lifespan

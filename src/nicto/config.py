@@ -14,6 +14,8 @@ DEFAULT_PATH_SOLVER = "dijkstra"
 DEFAULT_SCHEDULE_SOLVER = "flexcurve"
 SUPPORTED_PATH_SOLVERS = frozenset({DEFAULT_PATH_SOLVER})
 SUPPORTED_SCHEDULE_SOLVERS = frozenset({DEFAULT_SCHEDULE_SOLVER})
+DEFAULT_PRESENTATION = "none"
+SUPPORTED_PRESENTATIONS = frozenset({DEFAULT_PRESENTATION, "epics"})
 
 
 class FlexcurveSolverProfile(StrEnum):
@@ -40,6 +42,7 @@ class Config:
     path_solver: str = DEFAULT_PATH_SOLVER
     schedule_solver: str = DEFAULT_SCHEDULE_SOLVER
     schedule_profile: FlexcurveSolverProfile = DEFAULT_FLEXCURVE_SOLVER_PROFILE
+    presentation: str = DEFAULT_PRESENTATION
 
     def __post_init__(self) -> None:
         """Validate schedule dimensions and derive an integral slot count."""
@@ -65,6 +68,7 @@ class Config:
         hyperperiod = _read_hyperperiod(environment)
         tick_granularity = _read_tick_granularity(environment)
         network = _read_network(environment)
+        presentation = _read_choice(environment, "NICTO_PRESENTATION", DEFAULT_PRESENTATION, SUPPORTED_PRESENTATIONS)
 
         return cls(
             hyperperiod=hyperperiod,
@@ -82,6 +86,7 @@ class Config:
                 SUPPORTED_SCHEDULE_SOLVERS,
             ),
             schedule_profile=_read_schedule_profile(environment),
+            presentation=presentation,
         )
 
 

@@ -5,6 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "nicto"
 version = "0.1.0"
+description= "A web service for automatic stream scheduling in TAS-enabled networks"
 authors = [
     { name = "Víctor Vázquez", email = "victorvazrod@ugr.es" },
     { name = "Fernando Valdivia del Rosal", email = "f.valdivia@ugr.es" },
@@ -21,6 +22,12 @@ dependencies = [
     "uvicorn[standard]>=0.54.0",
 ]
 
+[project.optional-dependencies]
+epics = [
+    "numpy>=2.0.0",
+    "p4p>=4.2.0",
+]
+
 [project.scripts]
 nicto = "nicto.main:start"
 
@@ -34,15 +41,19 @@ dev = [
     "types-aiofiles>=25.1.0.20261107",
 ]
 
+[tool.mypy]
+explicit_package_bases = true
+mypy_path = ["src", "."]
+
+[[tool.mypy.overrides]]
+module = ["p4p.*", "numpy.*"]
+ignore_missing_imports = true
+
 [tool.pytest]
 addopts = ["--import-mode=importlib"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
-
-[tool.mypy]
-explicit_package_bases = true
-mypy_path = ["src", "."]
 
 [tool.ruff]
 line-length = 120

@@ -5,6 +5,7 @@ from nicto.application.ports import (
     StreamRepository,
     UnitOfWork,
 )
+from nicto.application.use_cases.publish_flexcurve import PublishFlexcurveUseCase
 from nicto.config import Config
 from nicto.domain.models import Stream
 
@@ -32,6 +33,7 @@ class InsertStreamUseCase:
         path_solver: PathSolver,
         schedule_solver: ScheduleSolver,
         config: Config,
+        flexcurve_publication: PublishFlexcurveUseCase | None = None,
     ) -> None:
         self._network_repository = network_repository
         self._stream_repository = stream_repository
@@ -39,6 +41,7 @@ class InsertStreamUseCase:
         self._path_solver = path_solver
         self._schedule_solver = schedule_solver
         self._config = config
+        self._flexcurve_publication = flexcurve_publication
 
     async def execute(self, stream: Stream) -> Stream:
         """Retrieve both endpoint ports before persisting the stream."""
@@ -58,6 +61,10 @@ class InsertStreamUseCase:
 
         created_stream = await self._stream_repository.create_stream(scheduled_stream)
         await self._unit_of_work.commit()
+        if self._flexcurve_publication is not None:
+            await self._flexcurve_publication.publish_ports(
+                allocation.port_mac_address for allocation in created_stream.allocations
+            )
         return created_stream
 
     def _validate_schedule_alignment(self, stream: Stream) -> None:

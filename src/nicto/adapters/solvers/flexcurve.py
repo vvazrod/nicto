@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from nicto.application.ports import ScheduleSolver
 from nicto.application.use_cases.insert_stream import StreamUnfeasibleError
 from nicto.config import Config, FlexcurveSolverProfile
+from nicto.domain.flexcurve import calculate_flexcurve
 from nicto.domain.models import Allocation, Gap, Hop, Stream
 
 
@@ -105,11 +106,6 @@ class FlexcurveSolver(ScheduleSolver):
             starts[0] += 1
             if starts[0] >= window or not _realign(hops, window, starts, gap_nums):
                 return best
-
-
-def calculate_flexcurve(stream_size: int, gaps: list[Gap]) -> int:
-    """Return the number of start positions of a stream of ``stream_size`` slots within the gaps."""
-    return sum(gap.num_slots - stream_size + 1 for gap in gaps if gap.num_slots >= stream_size)
 
 
 def _fold_gaps(allocations: list[Allocation], window: int) -> list[Gap]:

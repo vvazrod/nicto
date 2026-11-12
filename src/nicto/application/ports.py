@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 
 from pydantic_extra_types.mac_address import MacAddress
 
@@ -84,3 +85,14 @@ class ScheduleSolver(ABC):
         config: Config,
     ) -> list[Allocation]:
         """Find feasible allocations for a stream along a path, given the allocations of its egress ports."""
+
+
+class FlexcurvePublisher(ABC):
+    """Abstract base class for presentation backends that publish the flexcurve of a port."""
+
+    @abstractmethod
+    async def publish_flexcurve(self, port_mac_address: MacAddress, flexcurve: Sequence[int]) -> None:
+        """Publish the flexcurve of a port, where element ``i`` is the number of start positions for ``i + 1`` slots."""
+
+    async def close(self) -> None:  # noqa: B027
+        """Release the resources held by the backend."""

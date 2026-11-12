@@ -20,6 +20,7 @@ The gRPC server reads these environment variables when `nicto` starts:
 | `NICTO_SCHEDULE_SOLVER` | `flexcurve` | Schedule solver. |
 | `NICTO_SCHEDULE_PROFILE` | `max_throughput` | `max_throughput` takes the first feasible gaps; `min_latency` searches for the lowest end-to-end latency. |
 | `NICTO_IN_MEMORY_TOPOLOGY_PATH` | — | Required when `NICTO_NETWORK_CONTROLLER=in-memory`. |
+| `NICTO_PRESENTATION` | `none` | Presentation backend: `none` or `epics` (requires the `nicto[epics]` extra). With `epics`, the flexcurve of each port is put to the PV `NICTO:FLEXCURVE:<port MAC with dashes>`, at startup and, for the ports of the stream, after every insert or removal. The flexcurve of a path is the element-wise minimum of those of its ports. |
 
 ## Docker
 

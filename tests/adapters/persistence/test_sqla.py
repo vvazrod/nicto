@@ -92,6 +92,31 @@ async def test_get_topology(db_session: AsyncSession) -> None:
     assert links == [LINK]
 
 
+async def test_get_port_by_mac_reflects_allocations_changed_after_loading(db_session: AsyncSession) -> None:
+    """Test a port already loaded in the session does not hide later allocation changes."""
+    network_repository = SqlaNetworkRepository(db_session)
+    await network_repository.create_node(NODE)
+    port = NODE.ports[0]
+    await network_repository.get_port_by_mac(port.mac_address)
+    stream = Stream(
+        id=StreamID(mac_address=port.mac_address, unique_id=1),
+        src_mac_address=port.mac_address,
+        dst_mac_address=NODE.ports[1].mac_address,
+        max_frame_size=100,
+        max_interval_frames=1,
+        interval=100_000,
+        max_latency=1_000_000,
+    )
+    stream.allocations = [Allocation(stream_id=stream.id, port_mac_address=port.mac_address, start_idx=2, num_slots=3)]
+    await SqlaStreamRepository(db_session).create_stream(stream)
+    await db_session.commit()
+
+    reloaded = await network_repository.get_port_by_mac(port.mac_address)
+
+    assert reloaded is not None
+    assert reloaded.allocations == stream.allocations
+
+
 async def test_create_stream(db_session: AsyncSession) -> None:
     """Test persisting a stream together with its allocations."""
     network_repository = SqlaNetworkRepository(db_session)

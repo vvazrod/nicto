@@ -9,7 +9,9 @@ from nicto.adapters.persistence.database import create_db_session
 from nicto.adapters.persistence.repositories import SqlaNetworkRepository, SqlaStreamRepository
 from nicto.adapters.persistence.unit_of_work import SqlaUnitOfWork
 from nicto.adapters.solvers.factory import create_path_solver, create_schedule_solver
+from nicto.application.ports import FlexcurvePublisher
 from nicto.application.use_cases.insert_stream import InsertStreamUseCase
+from nicto.application.use_cases.publish_flexcurve import PublishFlexcurveUseCase
 from nicto.application.use_cases.remove_stream import RemoveStreamUseCase
 from nicto.config import Config
 
@@ -25,9 +27,26 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+def provide_flexcurve_publication(
+    session: AsyncSession,
+    config: Config,
+    publisher: FlexcurvePublisher | None,
+) -> PublishFlexcurveUseCase | None:
+    """Assemble the port flexcurve publication, if a presentation backend is enabled."""
+    if publisher is None:
+        return None
+
+    return PublishFlexcurveUseCase(
+        network_repository=SqlaNetworkRepository(session),
+        publisher=publisher,
+        config=config,
+    )
+
+
 def provide_insert_stream_use_case(
     session: Annotated[AsyncSession, Depends(get_session)],
     config: Annotated[Config, Depends(get_config)],
+    request: Request,
 ) -> InsertStreamUseCase:
     """Assemble the insert stream use case with its adapters."""
     return InsertStreamUseCase(
@@ -37,16 +56,20 @@ def provide_insert_stream_use_case(
         path_solver=create_path_solver(config),
         schedule_solver=create_schedule_solver(config),
         config=config,
+        flexcurve_publication=provide_flexcurve_publication(session, config, request.app.state.flexcurve_publisher),
     )
 
 
 def provide_remove_stream_use_case(
     session: Annotated[AsyncSession, Depends(get_session)],
+    config: Annotated[Config, Depends(get_config)],
+    request: Request,
 ) -> RemoveStreamUseCase:
     """Assemble the remove stream use case with its adapters."""
     return RemoveStreamUseCase(
         stream_repository=SqlaStreamRepository(session),
         unit_of_work=SqlaUnitOfWork(session),
+        flexcurve_publication=provide_flexcurve_publication(session, config, request.app.state.flexcurve_publisher),
     )
 
 
