@@ -14,8 +14,6 @@ DEFAULT_PATH_SOLVER = "dijkstra"
 DEFAULT_SCHEDULE_SOLVER = "flexcurve"
 SUPPORTED_PATH_SOLVERS = frozenset({DEFAULT_PATH_SOLVER})
 SUPPORTED_SCHEDULE_SOLVERS = frozenset({DEFAULT_SCHEDULE_SOLVER})
-MIN_GRPC_SERVER_PORT = 1
-MAX_GRPC_SERVER_PORT = 65535
 
 
 class FlexcurveSolverProfile(StrEnum):
@@ -34,8 +32,6 @@ class Config:
 
     hyperperiod: int
     tick_granularity: int
-    grpc_server_address: str = DEFAULT_GRPC_SERVER_ADDRESS
-    grpc_server_port: int = DEFAULT_GRPC_SERVER_PORT
     api_host: str = DEFAULT_API_HOST
     api_port: int = DEFAULT_API_PORT
     network: str = DEFAULT_NETWORK
@@ -68,17 +64,13 @@ class Config:
         environment = os.environ if environment is None else environment
         hyperperiod = _read_hyperperiod(environment)
         tick_granularity = _read_tick_granularity(environment)
-        grpc_address = _read_grpc_address(environment)
-        grpc_port = _read_grpc_port(environment)
         network = _read_network(environment)
 
         return cls(
             hyperperiod=hyperperiod,
             tick_granularity=tick_granularity,
-            grpc_server_address=grpc_address,
-            grpc_server_port=grpc_port,
             api_host=_read_api_host(environment),
-            api_port=_read_port(environment, "NICTO_API_PORT", DEFAULT_API_PORT),
+            api_port=_read_api_port(environment),
             network=network,
             topology_path=_read_topology_path(environment),
             database_url=_read_database_url(environment),
@@ -129,14 +121,6 @@ def _read_tick_granularity(environment: Mapping[str, str]) -> int:
     return tick
 
 
-def _read_grpc_address(environment: Mapping[str, str]) -> str:
-    address = environment.get("NICTO_GRPC_SERVER_ADDRESS", DEFAULT_GRPC_SERVER_ADDRESS).strip()
-    if not address:
-        msg = "NICTO_GRPC_SERVER_ADDRESS must not be empty"
-        raise ValueError(msg)
-    return address
-
-
 def _read_api_host(environment: Mapping[str, str]) -> str:
     host = environment.get("NICTO_API_HOST", DEFAULT_API_HOST).strip()
     if not host:
@@ -145,24 +129,17 @@ def _read_api_host(environment: Mapping[str, str]) -> str:
     return host
 
 
-def _read_grpc_port(environment: Mapping[str, str]) -> int:
-    return _read_port(environment, "NICTO_GRPC_SERVER_PORT", DEFAULT_GRPC_SERVER_PORT)
-
-
-def _read_port(environment: Mapping[str, str], name: str, default: int) -> int:
-    port_value = environment.get(name, str(default)).strip()
+def _read_api_port(environment: Mapping[str, str]) -> int:
+    port_value = environment.get("NICTO_API_PORT", DEFAULT_API_PORT)
     if not port_value:
-        msg = f"{name} must be set"
+        msg = "NICTO_API_PORT must be set"
         raise ValueError(msg)
     try:
         port = int(port_value)
     except ValueError as error:
-        msg = f"{name} must be an integer"
+        msg = "NICTO_API_PORT must be an integer"
         raise ValueError(msg) from error
 
-    if not MIN_GRPC_SERVER_PORT <= port <= MAX_GRPC_SERVER_PORT:
-        msg = f"{name} must be between 1 and 65535"
-        raise ValueError(msg)
     return port
 
 

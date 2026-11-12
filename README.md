@@ -21,6 +21,19 @@ The gRPC server reads these environment variables when `nicto` starts:
 | `NICTO_SCHEDULE_PROFILE` | `max_throughput` | `max_throughput` takes the first feasible gaps; `min_latency` searches for the lowest end-to-end latency. |
 | `NICTO_IN_MEMORY_TOPOLOGY_PATH` | — | Required when `NICTO_NETWORK_CONTROLLER=in-memory`. |
 
+## Docker
+
+```sh
+docker build -t nicto .
+docker run -p 8000:8000 -v nicto-data:/data -v ./topology.json:/config/topology.json:ro \
+  -e NICTO_HYPERPERIOD=1000000 -e NICTO_TICK_GRANULARITY=1000 \
+  -e NICTO_TOPOLOGY_PATH=/config/topology.json nicto
+```
+
+In the container `NICTO_DATABASE_URL` defaults to `sqlite+aiosqlite:////data/nicto.db`,
+so mount a volume at `/data` to keep the database file outside the container.
+Note that the schema is currently recreated on every startup.
+
 The in-memory topology file contains `bridges`, `nodes`, and `links` arrays.
 Bridges define a hostname and ports. Nodes define a MAC address and attach to
 exactly one bridge port. Links reference bridge ports and define their
