@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 
 from nicto.adapters.persistence.models import AllocationModel, LinkModel, NodeModel, PortModel, StreamModel
 from nicto.application.ports import NetworkRepository, StreamRepository
-from nicto.domain.models import Allocation, Link, Node, Port, Stream
+from nicto.domain.models import Allocation, Link, Node, Port, Stream, StreamID
 
 
 class SqlaNetworkRepository(NetworkRepository):
@@ -85,7 +85,7 @@ class SqlaNetworkRepository(NetworkRepository):
             name=port_model.name,
             allocations=[
                 Allocation(
-                    stream_id=allocation.stream_id,
+                    stream_id=StreamID.parse(allocation.stream_id),
                     port_mac_address=MacAddress(allocation.port_mac_address),
                     start_idx=allocation.start_idx,
                     num_slots=allocation.num_slots,
@@ -104,7 +104,7 @@ class SqlaStreamRepository(StreamRepository):
     async def create_stream(self, stream: Stream) -> Stream:
         """Persist a scheduled stream and its allocations."""
         stream_model = StreamModel(
-            id=stream.id,
+            id=str(stream.id),
             src_mac_address=str(stream.src_mac_address),
             dst_mac_address=str(stream.dst_mac_address),
             vlan=stream.vlan,
@@ -125,3 +125,40 @@ class SqlaStreamRepository(StreamRepository):
         self._session.add(stream_model)
         await self._session.flush()
         return stream
+
+    async def get_stream_by_id(self, stream_id: StreamID) -> Stream | None:
+        """Retrieve a stream, with its allocations, by ID, if present."""
+        stream_model = await self._session.scalar(
+            select(StreamModel).options(selectinload(StreamModel.allocations)).where(StreamModel.id == str(stream_id)),
+        )
+        if stream_model is None:
+            return None
+        return Stream(
+            id=StreamID.parse(stream_model.id),
+            src_mac_address=MacAddress(stream_model.src_mac_address),
+            dst_mac_address=MacAddress(stream_model.dst_mac_address),
+            vlan=stream_model.vlan,
+            priority=stream_model.priority,
+            max_frame_size=stream_model.max_frame_size,
+            max_interval_frames=stream_model.max_interval_frames,
+            interval=stream_model.interval,
+            max_latency=stream_model.max_latency,
+            allocations=[
+                Allocation(
+                    stream_id=stream_id,
+                    port_mac_address=MacAddress(allocation.port_mac_address),
+                    start_idx=allocation.start_idx,
+                    num_slots=allocation.num_slots,
+                )
+                for allocation in stream_model.allocations
+            ],
+        )
+
+    async def delete_stream(self, stream_id: StreamID) -> None:
+        """Delete a stream and its allocations."""
+        stream_model = await self._session.scalar(
+            select(StreamModel).options(selectinload(StreamModel.allocations)).where(StreamModel.id == str(stream_id)),
+        )
+        if stream_model is not None:
+            await self._session.delete(stream_model)
+            await self._session.flush()

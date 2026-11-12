@@ -1,57 +1,60 @@
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncGenerator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
 
 from nicto.adapters.api.router import api_router
-from nicto.adapters.api.v1.streams.routes import get_insert_stream_use_case
 from nicto.adapters.network.factory import create_network_controller
-from nicto.adapters.persistence.database import create_engine, create_schema, create_session_factory
+from nicto.adapters.persistence.database import create_engine, create_session_factory, reset_schema
 from nicto.adapters.persistence.repositories import SqlaNetworkRepository
 from nicto.adapters.persistence.unit_of_work import SqlaUnitOfWork
 from nicto.application.use_cases.load_network import LoadNetworkUseCase
 from nicto.config import Config
-from nicto.dependencies import provide_insert_stream_use_case
+from nicto.dependencies import register_dependencies
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Create the database and load the network topology into it on startup."""
-    config = Config.from_env()
-    engine = create_engine(config.database_url)
-    await create_schema(engine)
-    session_factory = create_session_factory(engine)
+def _create_lifespan(config: Config | None) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        """Create the database schema and load the network topology into it on startup."""
+        resolved_config = Config.from_env() if config is None else config
+        engine = create_engine(resolved_config.database_url)
+        try:
+            # Reset schema (drop + create) to ensure clean state
+            await reset_schema(engine)
 
-    async with session_factory() as session:
-        await LoadNetworkUseCase(
-            repository=SqlaNetworkRepository(session),
-            controller=create_network_controller(config),
-            unit_of_work=SqlaUnitOfWork(session),
-        ).execute()
+            session_factory = create_session_factory(engine)
 
-    app.state.config = config
-    app.state.session_factory = session_factory
-    try:
-        yield
-    finally:
-        await engine.dispose()
+            # The session context manager rolls back uncommitted work if loading fails
+            async with session_factory() as session:
+                await LoadNetworkUseCase(
+                    repository=SqlaNetworkRepository(session),
+                    controller=create_network_controller(resolved_config),
+                    unit_of_work=SqlaUnitOfWork(session),
+                ).execute()
+
+            app.state.config = resolved_config
+            app.state.session_factory = session_factory
+            yield
+        finally:
+            await engine.dispose()
+
+    return lifespan
 
 
-def create_app() -> FastAPI:
-    """Build the FastAPI application."""
-    app = FastAPI(title="nicto", lifespan=lifespan)
+def create_app(config: Config | None = None) -> FastAPI:
+    """Build the FastAPI application, loading the configuration from the environment if none is given."""
+    app = FastAPI(title="nicto", lifespan=_create_lifespan(config))
     app.include_router(api_router)
-    app.dependency_overrides[get_insert_stream_use_case] = provide_insert_stream_use_case
+    register_dependencies(app)
     return app
-
-
-app = create_app()
 
 
 def start() -> None:
     """Start the web application."""
-    uvicorn.run("nicto.main:app", host="0.0.0.0", port=8000, reload=False)  # noqa: S104
+    config = Config.from_env()
+    uvicorn.run("nicto.main:create_app", factory=True, host=config.api_host, port=config.api_port, reload=False)
 
 
 if __name__ == "__main__":

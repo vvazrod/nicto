@@ -12,8 +12,8 @@ The gRPC server reads these environment variables when `nicto` starts:
 | --- | --- | --- |
 | `NICTO_HYPERPERIOD` | — | Required schedule duration, in nanoseconds. Must be divisible by the tick granularity. |
 | `NICTO_TICK_GRANULARITY` | — | Required duration of a single schedule slot, in nanoseconds. |
-| `NICTO_SERVER_ADDRESS` | `127.0.0.1` | |
-| `NICTO_SERVER_PORT` | `8000` | |
+| `NICTO_API_HOST` | `0.0.0.0` | Address the HTTP API binds to. |
+| `NICTO_API_PORT` | `8000` | Port the HTTP API listens on. |
 | `NICTO_NETWORK_CONTROLLER` | `in-memory` | |
 | `NICTO_DATABASE_URL` | `sqlite+aiosqlite:///:memory:` | SQLAlchemy async database URL, e.g. `sqlite+aiosqlite:///nicto.db` for a file. |
 | `NICTO_PATH_SOLVER` | `dijkstra` | Path solver. |

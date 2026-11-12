@@ -4,7 +4,7 @@ from pydantic_extra_types.mac_address import MacAddress
 from nicto.adapters.solvers.flexcurve import FlexcurveSolver
 from nicto.application.use_cases.insert_stream import StreamUnfeasibleError
 from nicto.config import Config, FlexcurveSolverProfile
-from nicto.domain.models import Allocation, Hop, Link, Port, Stream
+from nicto.domain.models import Allocation, Hop, Link, Port, Stream, StreamID
 
 CONFIG = Config(hyperperiod=20_000, tick_granularity=1_000)
 
@@ -20,6 +20,7 @@ def _link(a: int, b: int) -> Link:
 # src(1) - sw(2,3) - dst(4); each stream of 125 bytes takes one 1 us slot per link.
 LINKS = [_link(1, 2), _link(3, 4)]
 STREAM = Stream(
+    id=StreamID(mac_address=_mac(1), unique_id=1),
     src_mac_address=_mac(1),
     dst_mac_address=_mac(4),
     max_frame_size=125,
@@ -67,7 +68,9 @@ def test_min_latency_skips_to_a_later_start_with_lower_latency() -> None:
     existing = [_busy(STREAM, 3, 0, 10), _busy(STREAM, 1, 10, 2)]
 
     max_throughput = FlexcurveSolver(FlexcurveSolverProfile.MAX_THROUGHPUT).find_schedule(
-        STREAM, _path(existing), CONFIG,
+        STREAM,
+        _path(existing),
+        CONFIG,
     )
     min_latency = FlexcurveSolver(FlexcurveSolverProfile.MIN_LATENCY).find_schedule(STREAM, _path(existing), CONFIG)
 

@@ -19,15 +19,9 @@ class LoadNetworkUseCase:
         nodes, links = await self._controller.get_topology()
 
         for node in nodes:
-            created_node = await self._repository.create_node(node)
-            if created_node != node:
-                msg = f"Failed to persist node {node.hostname}"
-                raise RuntimeError(msg)
+            await self._repository.create_node(node)
 
         for link in links:
-            created_link = await self._repository.create_link(link)
-            if created_link != link:
-                msg = f"Failed to persist link between {link.port_a_mac_address} and {link.port_b_mac_address}"
-                raise RuntimeError(msg)
+            await self._repository.create_link(link)
 
         await self._unit_of_work.commit()

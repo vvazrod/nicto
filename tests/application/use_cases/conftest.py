@@ -11,7 +11,7 @@ from nicto.application.ports import (
     UnitOfWork,
 )
 from nicto.config import Config
-from nicto.domain.models import Allocation, Hop, Link, Node, Port, Stream
+from nicto.domain.models import Allocation, Hop, Link, Node, Port, Stream, StreamID
 
 
 class MockNetworkRepository(NetworkRepository):
@@ -25,16 +25,18 @@ class MockNetworkRepository(NetworkRepository):
         self.fail_link = False
 
     async def create_link(self, link: Link) -> Link:
-        """Store the link, or return a mismatching one when configured to fail."""
+        """Store the link, or raise when configured to fail."""
         if self.fail_link:
-            return link.model_copy(update={"speed": link.speed + 1})
+            msg = f"Failed to persist link between {link.port_a_mac_address} and {link.port_b_mac_address}"
+            raise RuntimeError(msg)
         self.links.append(link)
         return link
 
     async def create_node(self, node: Node) -> Node:
-        """Store the node, or return a mismatching one when configured to fail."""
+        """Store the node, or raise when configured to fail."""
         if self.fail_node:
-            return Node(hostname=node.hostname)
+            msg = f"Failed to persist node {node.hostname}"
+            raise RuntimeError(msg)
         self.nodes.append(node)
         return node
 
@@ -63,16 +65,29 @@ class MockStreamRepository(StreamRepository):
         self.streams.append(stream)
         return stream
 
+    async def get_stream_by_id(self, stream_id: StreamID) -> Stream | None:
+        """Return the recorded stream with that ID, if any."""
+        return next((stream for stream in self.streams if stream.id == stream_id), None)
+
+    async def delete_stream(self, stream_id: StreamID) -> None:
+        """Forget the stream with that ID."""
+        self.streams = [stream for stream in self.streams if stream.id != stream_id]
+
 
 class MockUnitOfWork(UnitOfWork):
-    """Mock unit of work that counts commits."""
+    """Mock unit of work that counts commits and rollbacks."""
 
     def __init__(self) -> None:
         self.commits = 0
+        self.rollbacks = 0
 
     async def commit(self) -> None:
         """Count the commit."""
         self.commits += 1
+
+    async def rollback(self) -> None:
+        """Count the rollback."""
+        self.rollbacks += 1
 
 
 class MockNetworkController(NetworkController):

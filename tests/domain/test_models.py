@@ -1,9 +1,7 @@
-import uuid
-
 import pytest
 from pydantic_extra_types.mac_address import MacAddress
 
-from nicto.domain.models import Allocation, Gap, Port, Stream
+from nicto.domain.models import Allocation, Gap, Port, Stream, StreamID
 
 PORT_MAC_ADDRESS = MacAddress("00:11:22:33:44:55")
 DESTINATION_MAC_ADDRESS = MacAddress("00:11:22:33:44:56")
@@ -14,7 +12,7 @@ STREAM_SLOTS = 3
 def allocation(start_idx: int, num_slots: int) -> Allocation:
     """Create an allocation belonging to the test port."""
     return Allocation(
-        stream_id=uuid.uuid4(),
+        stream_id=StreamID(mac_address=PORT_MAC_ADDRESS, unique_id=1),
         port_mac_address=PORT_MAC_ADDRESS,
         start_idx=start_idx,
         num_slots=num_slots,
@@ -39,6 +37,7 @@ def test_port_gaps() -> None:
 def test_stream_slots() -> None:
     """Test a stream rounds its transmission time up to whole schedule slots."""
     stream = Stream(
+        id=StreamID(mac_address=PORT_MAC_ADDRESS, unique_id=1),
         src_mac_address=PORT_MAC_ADDRESS,
         dst_mac_address=DESTINATION_MAC_ADDRESS,
         max_frame_size=1500,

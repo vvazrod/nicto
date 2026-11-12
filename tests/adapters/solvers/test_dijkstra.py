@@ -3,7 +3,7 @@ from pydantic_extra_types.mac_address import MacAddress
 
 from nicto.adapters.solvers.dijkstra import DijkstraPathSolver
 from nicto.application.use_cases.insert_stream import StreamUnfeasibleError
-from nicto.domain.models import Link, Node, Port, Stream
+from nicto.domain.models import Link, Node, Port, Stream, StreamID
 
 
 def _mac(index: int) -> MacAddress:
@@ -23,6 +23,7 @@ NODES = [_node("src", 1), _node("sw1", 2, 3, 4), _node("sw2", 5, 6), _node("dst"
 FAST_LINKS = [_link(1, 2, 10), _link(3, 8, 10)]
 SLOW_LINKS = [_link(4, 5, 5), _link(6, 8, 5_000)]
 STREAM = Stream(
+    id=StreamID(mac_address=_mac(1), unique_id=1),
     src_mac_address=_mac(1),
     dst_mac_address=_mac(8),
     max_frame_size=1500,

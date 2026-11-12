@@ -1,9 +1,7 @@
-import uuid
-
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_extra_types.mac_address import MacAddress
 
-from nicto.domain.models import Stream
+from nicto.domain.models import MAX_UNIQUE_ID, Stream, StreamID
 
 
 class AllocationResponse(BaseModel):
@@ -19,6 +17,7 @@ class InsertStreamRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    unique_id: int = Field(ge=0, le=MAX_UNIQUE_ID)
     src_mac_address: MacAddress
     dst_mac_address: MacAddress
     vlan: int | None = None
@@ -30,13 +29,14 @@ class InsertStreamRequest(BaseModel):
 
     def to_domain(self) -> Stream:
         """Build the domain stream described by the request."""
-        return Stream(**self.model_dump())
+        fields = self.model_dump(exclude={"unique_id"})
+        return Stream(id=StreamID(mac_address=self.src_mac_address, unique_id=self.unique_id), **fields)
 
 
 class InsertStreamResponse(BaseModel):
     """The inserted stream with its computed schedule."""
 
-    id: uuid.UUID
+    id: str
     src_mac_address: MacAddress
     dst_mac_address: MacAddress
     vlan: int | None
@@ -50,4 +50,4 @@ class InsertStreamResponse(BaseModel):
     @classmethod
     def from_domain(cls, stream: Stream) -> "InsertStreamResponse":
         """Build the response from a domain stream."""
-        return cls.model_validate(stream, from_attributes=True)
+        return cls.model_validate(stream.model_copy(update={"id": str(stream.id)}), from_attributes=True)

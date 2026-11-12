@@ -6,6 +6,8 @@ from pathlib import Path
 
 DEFAULT_GRPC_SERVER_ADDRESS = "127.0.0.1"
 DEFAULT_GRPC_SERVER_PORT = 50051
+DEFAULT_API_HOST = "0.0.0.0"  # noqa: S104
+DEFAULT_API_PORT = 8000
 DEFAULT_NETWORK = "simulated"
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 DEFAULT_PATH_SOLVER = "dijkstra"
@@ -34,6 +36,8 @@ class Config:
     tick_granularity: int
     grpc_server_address: str = DEFAULT_GRPC_SERVER_ADDRESS
     grpc_server_port: int = DEFAULT_GRPC_SERVER_PORT
+    api_host: str = DEFAULT_API_HOST
+    api_port: int = DEFAULT_API_PORT
     network: str = DEFAULT_NETWORK
     topology_path: Path | None = None
     database_url: str = DEFAULT_DATABASE_URL
@@ -73,6 +77,8 @@ class Config:
             tick_granularity=tick_granularity,
             grpc_server_address=grpc_address,
             grpc_server_port=grpc_port,
+            api_host=_read_api_host(environment),
+            api_port=_read_port(environment, "NICTO_API_PORT", DEFAULT_API_PORT),
             network=network,
             topology_path=_read_topology_path(environment),
             database_url=_read_database_url(environment),
@@ -131,27 +137,39 @@ def _read_grpc_address(environment: Mapping[str, str]) -> str:
     return address
 
 
+def _read_api_host(environment: Mapping[str, str]) -> str:
+    host = environment.get("NICTO_API_HOST", DEFAULT_API_HOST).strip()
+    if not host:
+        msg = "NICTO_API_HOST must not be empty"
+        raise ValueError(msg)
+    return host
+
+
 def _read_grpc_port(environment: Mapping[str, str]) -> int:
-    port_value = environment.get("NICTO_GRPC_SERVER_PORT", str(DEFAULT_GRPC_SERVER_PORT)).strip()
+    return _read_port(environment, "NICTO_GRPC_SERVER_PORT", DEFAULT_GRPC_SERVER_PORT)
+
+
+def _read_port(environment: Mapping[str, str], name: str, default: int) -> int:
+    port_value = environment.get(name, str(default)).strip()
     if not port_value:
-        msg = "NICTO_GRPC_SERVER_PORT must be set when using the timon network controller"
+        msg = f"{name} must be set"
         raise ValueError(msg)
     try:
         port = int(port_value)
     except ValueError as error:
-        msg = "NICTO_GRPC_SERVER_PORT must be an integer"
+        msg = f"{name} must be an integer"
         raise ValueError(msg) from error
 
     if not MIN_GRPC_SERVER_PORT <= port <= MAX_GRPC_SERVER_PORT:
-        msg = "NICTO_GRPC_SERVER_PORT must be between 1 and 65535"
+        msg = f"{name} must be between 1 and 65535"
         raise ValueError(msg)
     return port
 
 
 def _read_network(environment: Mapping[str, str]) -> str:
     controller = environment.get("NICTO_NETWORK_CONTROLLER", DEFAULT_NETWORK).strip()
-    if controller not in {"simulated", "safran"}:
-        msg = "NICTO_NETWORK must be either 'simulated' or 'safran'"
+    if controller != "simulated":
+        msg = "NICTO_NETWORK must be 'simulated'"
         raise ValueError(msg)
     return controller
 

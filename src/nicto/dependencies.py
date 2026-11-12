@@ -1,14 +1,16 @@
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends, FastAPI, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from nicto.adapters.api.v1.streams.routes import get_insert_stream_use_case, get_remove_stream_use_case
 from nicto.adapters.persistence.database import create_db_session
 from nicto.adapters.persistence.repositories import SqlaNetworkRepository, SqlaStreamRepository
 from nicto.adapters.persistence.unit_of_work import SqlaUnitOfWork
 from nicto.adapters.solvers.factory import create_path_solver, create_schedule_solver
 from nicto.application.use_cases.insert_stream import InsertStreamUseCase
+from nicto.application.use_cases.remove_stream import RemoveStreamUseCase
 from nicto.config import Config
 
 
@@ -36,3 +38,19 @@ def provide_insert_stream_use_case(
         schedule_solver=create_schedule_solver(config),
         config=config,
     )
+
+
+def provide_remove_stream_use_case(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> RemoveStreamUseCase:
+    """Assemble the remove stream use case with its adapters."""
+    return RemoveStreamUseCase(
+        stream_repository=SqlaStreamRepository(session),
+        unit_of_work=SqlaUnitOfWork(session),
+    )
+
+
+def register_dependencies(app: FastAPI) -> None:
+    """Bind the API's use case placeholders to their concrete providers."""
+    app.dependency_overrides[get_insert_stream_use_case] = provide_insert_stream_use_case
+    app.dependency_overrides[get_remove_stream_use_case] = provide_remove_stream_use_case

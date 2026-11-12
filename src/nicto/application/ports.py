@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from pydantic_extra_types.mac_address import MacAddress
 
 from nicto.config import Config
-from nicto.domain.models import Allocation, Hop, Link, Node, Port, Stream
+from nicto.domain.models import Allocation, Hop, Link, Node, Port, Stream, StreamID
 
 
 class NetworkRepository(ABC):
@@ -33,6 +33,14 @@ class StreamRepository(ABC):
     async def create_stream(self, stream: Stream) -> Stream:
         """Persist a scheduled data stream."""
 
+    @abstractmethod
+    async def get_stream_by_id(self, stream_id: StreamID) -> Stream | None:
+        """Retrieve a stream, with its allocations, by ID, if present."""
+
+    @abstractmethod
+    async def delete_stream(self, stream_id: StreamID) -> None:
+        """Delete a stream and its allocations."""
+
 
 class UnitOfWork(ABC):
     """Abstract transaction boundary shared by the repositories of a use case."""
@@ -40,6 +48,10 @@ class UnitOfWork(ABC):
     @abstractmethod
     async def commit(self) -> None:
         """Make all pending repository changes permanent."""
+
+    @abstractmethod
+    async def rollback(self) -> None:
+        """Discard all pending repository changes."""
 
 
 class NetworkController(ABC):

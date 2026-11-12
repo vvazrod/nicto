@@ -8,7 +8,7 @@ from nicto.application.use_cases.insert_stream import (
     PortNotFoundError,
 )
 from nicto.config import Config
-from nicto.domain.models import Link, Node, Port, Stream
+from nicto.domain.models import Link, Node, Port, Stream, StreamID
 from tests.application.use_cases.conftest import (
     MockNetworkRepository,
     MockPathSolver,
@@ -26,6 +26,7 @@ DESTINATION_NODE = Node(
     ports=[Port(mac_address=MacAddress("00:11:22:33:44:56"), name="eth0")],
 )
 STREAM = Stream(
+    id=StreamID(mac_address=SOURCE_NODE.ports[0].mac_address, unique_id=1),
     src_mac_address=SOURCE_NODE.ports[0].mac_address,
     dst_mac_address=DESTINATION_NODE.ports[0].mac_address,
     max_frame_size=1500,

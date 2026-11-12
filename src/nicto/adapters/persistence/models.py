@@ -1,7 +1,7 @@
-from uuid import UUID
-
 from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+STREAM_ID_LENGTH = 22
 
 
 class Base(DeclarativeBase):
@@ -73,7 +73,7 @@ class StreamModel(Base):
 
     __tablename__ = "streams"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(String(STREAM_ID_LENGTH), primary_key=True)
     src_mac_address: Mapped[str] = mapped_column(String(17), nullable=False)
     dst_mac_address: Mapped[str] = mapped_column(String(17), nullable=False)
     vlan: Mapped[int | None] = mapped_column(Integer)
@@ -97,7 +97,8 @@ class AllocationModel(Base):
         CheckConstraint("num_slots > 0", name="positive_num_slots"),
     )
 
-    stream_id: Mapped[UUID] = mapped_column(
+    stream_id: Mapped[str] = mapped_column(
+        String(STREAM_ID_LENGTH),
         ForeignKey("streams.id"),
         primary_key=True,
     )

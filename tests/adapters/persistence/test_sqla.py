@@ -3,9 +3,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from nicto.adapters.persistence.models import LinkModel, NodeModel, StreamModel
+from nicto.adapters.persistence.models import AllocationModel, LinkModel, NodeModel, StreamModel
 from nicto.adapters.persistence.repositories import SqlaNetworkRepository, SqlaStreamRepository
-from nicto.domain.models import Allocation, Link, Node, Port, Stream
+from nicto.domain.models import Allocation, Link, Node, Port, Stream, StreamID
 
 NODE = Node(
     hostname="switch-a",
@@ -97,6 +97,7 @@ async def test_create_stream(db_session: AsyncSession) -> None:
     network_repository = SqlaNetworkRepository(db_session)
     await network_repository.create_node(NODE)
     stream = Stream(
+        id=StreamID(mac_address=NODE.ports[0].mac_address, unique_id=1),
         src_mac_address=NODE.ports[0].mac_address,
         dst_mac_address=NODE.ports[1].mac_address,
         max_frame_size=100,
@@ -112,10 +113,35 @@ async def test_create_stream(db_session: AsyncSession) -> None:
 
     assert created_stream == stream
     stream_model = await db_session.scalar(
-        select(StreamModel).options(selectinload(StreamModel.allocations)).where(StreamModel.id == stream.id),
+        select(StreamModel).options(selectinload(StreamModel.allocations)).where(StreamModel.id == str(stream.id)),
     )
     assert stream_model is not None
     assert stream_model.vlan is None
     assert [(a.port_mac_address, a.start_idx, a.num_slots) for a in stream_model.allocations] == [
         (str(NODE.ports[0].mac_address), 2, 3),
     ]
+
+
+async def test_delete_stream_removes_its_allocations(db_session: AsyncSession) -> None:
+    """Test deleting a stream also deletes its allocations."""
+    await SqlaNetworkRepository(db_session).create_node(NODE)
+    stream = Stream(
+        id=StreamID(mac_address=NODE.ports[0].mac_address, unique_id=1),
+        src_mac_address=NODE.ports[0].mac_address,
+        dst_mac_address=NODE.ports[1].mac_address,
+        max_frame_size=100,
+        max_interval_frames=1,
+        interval=100_000,
+        max_latency=1_000_000,
+    )
+    stream.allocations = [
+        Allocation(stream_id=stream.id, port_mac_address=NODE.ports[0].mac_address, start_idx=2, num_slots=3),
+    ]
+    repository = SqlaStreamRepository(db_session)
+    await repository.create_stream(stream)
+    assert await repository.get_stream_by_id(stream.id) == stream
+
+    await repository.delete_stream(stream.id)
+
+    assert await repository.get_stream_by_id(stream.id) is None
+    assert await db_session.scalar(select(AllocationModel)) is None
