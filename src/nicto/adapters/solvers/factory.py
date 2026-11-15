@@ -7,7 +7,7 @@ from nicto.config import Config
 def create_path_solver(config: Config) -> PathSolver:
     """Create the path solver selected by the runtime configuration."""
     if config.path_solver == "dijkstra":
-        return DijkstraPathSolver()
+        return DijkstraPathSolver(config)
 
     msg = f"Unsupported path solver: {config.path_solver}"
     raise ValueError(msg)

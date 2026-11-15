@@ -5,9 +5,8 @@ each spine and a few edge nodes below each leaf. Streams are mostly bottom-up (e
 of top-down control streams. A total of 100 streams are inserted and 50 are removed, interleaved at random, over
 an in-memory SQLite database. This is repeated for each Flexcurve profile.
 
-Three CSV files are written: the path and schedule solving time of every insertion, the number of unfeasible
-insertions of each run, and the Flexcurve of every port at the end of each run, i.e. the number of positions where a
-stream of each possible frame size fits. Streams that do not fit are expected and are recorded as unfeasible.
+Two CSV files are written: the path and schedule solving time of every insertion and the number of unfeasible
+insertions of each run. Streams that do not fit are expected and are recorded as unfeasible.
 
 Run with ``uv run python benchmarks/flexcurve_spine_leaf_churn.py [--iterations N] [--seed S] [--output-dir DIR]``.
 """
@@ -26,7 +25,7 @@ from nicto.adapters.persistence.database import create_engine, create_schema, cr
 from nicto.adapters.persistence.repositories import SqlaNetworkRepository, SqlaStreamRepository
 from nicto.adapters.persistence.unit_of_work import SqlaUnitOfWork
 from nicto.adapters.solvers.dijkstra import DijkstraPathSolver
-from nicto.adapters.solvers.flexcurve import FlexcurveSolver, calculate_flexcurve
+from nicto.adapters.solvers.flexcurve import FlexcurveSolver
 from nicto.application.ports import PathSolver, ScheduleSolver
 from nicto.application.use_cases.insert_stream import InsertStreamUseCase, StreamUnfeasibleError
 from nicto.application.use_cases.remove_stream import RemoveStreamUseCase
@@ -61,11 +60,9 @@ TIMES_HEADER = [
     "path_time_ns",
     "schedule_time_ns",
 ]
-FLEXCURVE_HEADER = ["profile", "iteration", "node", "port", "mac_address", "frame_size", "slots", "flexcurve"]
 UNFEASIBLE_HEADER = ["profile", "iteration", "insertions", "unfeasible"]
 
 TimesRow = tuple[str, int, int, int, str, int, int, int | None, int | None]
-FlexcurveRow = tuple[str, int, str, str, str, int, int, int]
 
 
 class _TimedPathSolver(PathSolver):
@@ -168,27 +165,14 @@ def _random_stream(rng: random.Random, number: int, edge: list[Node], supervisor
     return stream, "up" if bottom_up else "down"
 
 
-def _frame_slots(frame_size: int) -> int:
-    probe = Stream(
-        id=StreamID(mac_address=MacAddress("00:00:00:00:00:00"), unique_id=0),
-        src_mac_address=MacAddress("00:00:00:00:00:00"),
-        dst_mac_address=MacAddress("00:00:00:00:00:00"),
-        max_frame_size=frame_size,
-        max_interval_frames=1,
-        interval=HYPERPERIOD,
-        max_latency=HYPERPERIOD,
-    )
-    return probe.slots(LINK_SPEED, TICK_GRANULARITY)
-
-
-async def _run(profile: FlexcurveSolverProfile, iteration: int, seed: int) -> tuple[list[TimesRow], list[FlexcurveRow]]:
+async def _run(profile: FlexcurveSolverProfile, iteration: int, seed: int) -> list[TimesRow]:
     """Run the insertions and removals of one iteration with a profile.
 
     Every operation uses its own session, as every API request does. Reusing one session would let it keep stale
     allocations of the ports it loaded before, which makes the results depend on garbage collection.
     """
     config = Config(hyperperiod=HYPERPERIOD, tick_granularity=TICK_GRANULARITY, schedule_profile=profile)
-    path_solver = _TimedPathSolver(DijkstraPathSolver())
+    path_solver = _TimedPathSolver(DijkstraPathSolver(config))
     schedule_solver = _TimedScheduleSolver(FlexcurveSolver(profile))
     topology, edge, supervisory = _spine_leaf_network()
     rng = random.Random(seed)  # noqa: S311
@@ -259,40 +243,10 @@ async def _run(profile: FlexcurveSolverProfile, iteration: int, seed: int) -> tu
                 ),
             )
 
-        async with session_factory() as session:
-            nodes, _ = await SqlaNetworkRepository(session).get_topology()
     finally:
         await engine.dispose()
 
-    return times, _final_flexcurves(profile, iteration, nodes, config)
-
-
-def _final_flexcurves(
-    profile: FlexcurveSolverProfile,
-    iteration: int,
-    nodes: list[Node],
-    config: Config,
-) -> list[FlexcurveRow]:
-    """Calculate, for every port, the Flexcurve of each frame size over the final schedule."""
-    rows: list[FlexcurveRow] = []
-    for node in nodes:
-        for port in node.ports:
-            gaps = port.gaps(config.total_slots)
-            for frame_size in FRAME_SIZES:
-                slots = _frame_slots(frame_size)
-                rows.append(
-                    (
-                        profile.value,
-                        iteration,
-                        node.hostname,
-                        port.name,
-                        str(port.mac_address),
-                        frame_size,
-                        slots,
-                        calculate_flexcurve(slots, gaps),
-                    ),
-                )
-    return rows
+    return times
 
 
 def _write_csv(path: Path, header: Sequence[str], rows: Sequence[Sequence[object]]) -> None:
@@ -305,14 +259,12 @@ def _write_csv(path: Path, header: Sequence[str], rows: Sequence[Sequence[object
 async def main(output_dir: Path, iterations: int, seed: int) -> None:
     """Run the benchmark for the minimum latency profile first and then for the maximum throughput one."""
     times: list[TimesRow] = []
-    flexcurves: list[FlexcurveRow] = []
     unfeasible_counts: list[tuple[str, int, int, int]] = []
     for profile in (FlexcurveSolverProfile.MIN_LATENCY, FlexcurveSolverProfile.MAX_THROUGHPUT):
         for iteration in range(1, iterations + 1):
             # Both profiles replay the same workload on each iteration
-            iteration_times, iteration_flexcurves = await _run(profile, iteration, seed + iteration)
+            iteration_times = await _run(profile, iteration, seed + iteration)
             times.extend(iteration_times)
-            flexcurves.extend(iteration_flexcurves)
             unfeasible = sum(1 for row in iteration_times if not row[6])
             unfeasible_counts.append((profile.value, iteration, len(iteration_times), unfeasible))
             solving_ms = sum((row[7] or 0) + (row[8] or 0) for row in iteration_times) / 1e6
@@ -322,12 +274,10 @@ async def main(output_dir: Path, iterations: int, seed: int) -> None:
             )
 
     times_path = output_dir / "flexcurve_spine_leaf_churn_times.csv"
-    flexcurves_path = output_dir / "flexcurve_spine_leaf_churn_flexcurves.csv"
     unfeasible_path = output_dir / "flexcurve_spine_leaf_churn_unfeasible.csv"
     _write_csv(times_path, TIMES_HEADER, times)
-    _write_csv(flexcurves_path, FLEXCURVE_HEADER, flexcurves)
     _write_csv(unfeasible_path, UNFEASIBLE_HEADER, unfeasible_counts)
-    print(f"Results saved to {times_path}, {unfeasible_path} and {flexcurves_path}")
+    print(f"Results saved to {times_path} and {unfeasible_path}")
 
 
 if __name__ == "__main__":

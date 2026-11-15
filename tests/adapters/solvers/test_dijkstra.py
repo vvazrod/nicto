@@ -3,7 +3,10 @@ from pydantic_extra_types.mac_address import MacAddress
 
 from nicto.adapters.solvers.dijkstra import DijkstraPathSolver
 from nicto.application.use_cases.insert_stream import StreamUnfeasibleError
-from nicto.domain.models import Link, Node, Port, Stream, StreamID
+from nicto.config import Config
+from nicto.domain.models import Allocation, Link, Node, Port, Stream, StreamID
+
+CONFIG = Config(hyperperiod=20_000_000, tick_granularity=1_000)
 
 
 def _mac(index: int) -> MacAddress:
@@ -37,7 +40,7 @@ def test_find_path_returns_the_lowest_delay_hops_in_order() -> None:
     """Test the cheapest route is chosen and ordered from source to destination."""
     links = [*SLOW_LINKS, *FAST_LINKS]
 
-    path = DijkstraPathSolver().find_path(STREAM, NODES, links)
+    path = DijkstraPathSolver(CONFIG).find_path(STREAM, NODES, links)
 
     assert [(hop.port.mac_address, hop.link) for hop in path] == [
         (_mac(1), FAST_LINKS[0]),
@@ -50,4 +53,40 @@ def test_find_path_raises_when_destination_is_unreachable() -> None:
     stream = STREAM.model_copy(update={"dst_mac_address": _mac(9)})
 
     with pytest.raises(StreamUnfeasibleError, match="No path"):
-        DijkstraPathSolver().find_path(stream, NODES, [*FAST_LINKS, *SLOW_LINKS])
+        DijkstraPathSolver(CONFIG).find_path(stream, NODES, [*FAST_LINKS, *SLOW_LINKS])
+
+
+def test_find_path_prefers_the_highest_flexcurve_over_lower_delay() -> None:
+    """Test a more schedulable path is selected even when it has a higher delay."""
+    nodes = [
+        node.model_copy(
+            update={
+                "ports": [
+                    port.model_copy(
+                        update={
+                            "allocations": [
+                                Allocation(
+                                    stream_id=STREAM.id,
+                                    port_mac_address=port.mac_address,
+                                    start_idx=12,
+                                    num_slots=CONFIG.total_slots - 12,
+                                ),
+                            ],
+                        },
+                    )
+                    if port.mac_address == _mac(3)
+                    else port
+                    for port in node.ports
+                ],
+            },
+        )
+        for node in NODES
+    ]
+
+    path = DijkstraPathSolver(CONFIG).find_path(STREAM, nodes, [*SLOW_LINKS, *FAST_LINKS])
+
+    assert [(hop.port.mac_address, hop.link) for hop in path] == [
+        (_mac(1), FAST_LINKS[0]),
+        (_mac(4), SLOW_LINKS[0]),
+        (_mac(6), SLOW_LINKS[1]),
+    ]
