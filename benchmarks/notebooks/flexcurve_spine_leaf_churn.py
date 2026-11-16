@@ -6,11 +6,12 @@ Two views of the data:
   iteration the per-insertion solver times are summed and cumulated over the
   insertion number, then the mean across iterations is shown as a line with
   one standard deviation as a shaded band, on a logarithmic y-axis.
-- A table summarizing, per profile, the mean and standard deviation of the
-  runtime and of the number of unfeasible streams, both across iterations.
+- A table summarizing, per profile and frame size, the mean and standard
+  deviation of latency, runtime, contiguous schedule availability, and number
+  of unfeasible streams across iterations.
 
-Run interactively with ``uv run marimo edit benchmarks/plots/flexcurve_spine_leaf_churn.py``
-or headless with ``uv run python benchmarks/plots/flexcurve_spine_leaf_churn.py``.
+Run interactively with ``uv run marimo edit benchmarks/notebooks/flexcurve_spine_leaf_churn.py``
+or headless with ``uv run python benchmarks/notebooks/flexcurve_spine_leaf_churn.py``.
 """
 
 import marimo
@@ -37,8 +38,10 @@ def _(pl):
     figures_dir = Path(__file__).parent.parent / "results" / "figures"
     figures_dir.mkdir(exist_ok=True, parents=True)
     times = pl.read_csv(results_dir / "flexcurve_spine_leaf_churn_times.csv")
+    latencies = pl.read_csv(results_dir / "flexcurve_spine_leaf_churn_latencies.csv")
+    availability = pl.read_csv(results_dir / "flexcurve_spine_leaf_churn_availability.csv")
     unfeasible = pl.read_csv(results_dir / "flexcurve_spine_leaf_churn_unfeasible.csv")
-    return figures_dir, times, unfeasible
+    return availability, figures_dir, latencies, times, unfeasible
 
 
 @app.cell
@@ -85,9 +88,11 @@ def _(figures_dir, pl, plt, profiles, runtime_stats, sns):
 
 
 @app.cell
-def _(pl, times, unfeasible):
+def _(availability, latencies, pl, times, unfeasible):
     # Total runtime per iteration (path + schedule summed over the insertions),
-    # in s, aggregated across iterations, next to the unfeasible stream counts.
+    # in s, and unfeasible stream counts aggregated across iterations. Latency
+    # is aggregated by frame size across feasible insertions. Contiguous
+    # availability is the mean largest free block across all port schedules.
     totals = times.group_by(["profile", "iteration"]).agg(
         ((pl.col("path_time_ns").fill_null(0) + pl.col("schedule_time_ns").fill_null(0)).sum() / 1e9).alias(
             "total_runtime_s",
@@ -106,8 +111,22 @@ def _(pl, times, unfeasible):
             ),
             on="profile",
         )
-        .sort("profile")
-        .rename({"profile": "Profile"})
+        .join(
+            latencies.group_by(["profile", "frame_size"]).agg(
+                (pl.col("latency_ns").mean() / 1e3).alias("Latency Mean [us]"),
+                (pl.col("latency_ns").std() / 1e3).alias("Latency Std [us]"),
+            ),
+            on="profile",
+        )
+        .join(
+            availability.group_by("profile").agg(
+                pl.col("contiguous_slots_available_percent").mean().alias("Contiguous Availability Mean [%]"),
+                pl.col("contiguous_slots_available_percent").std().alias("Contiguous Availability Std [%]"),
+            ),
+            on="profile",
+        )
+        .sort(["profile", "frame_size"])
+        .rename({"profile": "Profile", "frame_size": "Frame Size [B]"})
     )
     summary
 

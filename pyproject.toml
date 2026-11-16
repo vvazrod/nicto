@@ -43,6 +43,7 @@ dev = [
     "ruff>=0.16.0",
     "seaborn>=0.13.2",
     "types-aiofiles>=25.1.0.20261107",
+    "types-seaborn>=0.13.2.20261115",
 ]
 
 [tool.mypy]

@@ -5,8 +5,9 @@ each spine and a few edge nodes below each leaf. Streams are mostly bottom-up (e
 of top-down control streams. A total of 100 streams are inserted and 50 are removed, interleaved at random, over
 an in-memory SQLite database. This is repeated for each Flexcurve profile.
 
-Two CSV files are written: the path and schedule solving time of every insertion and the number of unfeasible
-insertions of each run. Streams that do not fit are expected and are recorded as unfeasible.
+Four CSV files are written: the path and schedule solving time of every insertion, the latency of every feasible
+insertion, the contiguous schedule availability of every run, and the number of unfeasible insertions of each run.
+Streams that do not fit are expected and are recorded as unfeasible.
 
 Run with ``uv run python benchmarks/flexcurve_spine_leaf_churn.py [--iterations N] [--seed S] [--output-dir DIR]``.
 """
@@ -18,8 +19,10 @@ import random
 import time
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Literal
 
 from pydantic_extra_types.mac_address import MacAddress
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from nicto.adapters.persistence.database import create_engine, create_schema, create_session_factory
 from nicto.adapters.persistence.repositories import SqlaNetworkRepository, SqlaStreamRepository
@@ -61,8 +64,12 @@ TIMES_HEADER = [
     "schedule_time_ns",
 ]
 UNFEASIBLE_HEADER = ["profile", "iteration", "insertions", "unfeasible"]
+LATENCIES_HEADER = ["profile", "iteration", "insertion", "frame_size", "latency_ns"]
+AVAILABILITY_HEADER = ["profile", "iteration", "contiguous_slots_available_percent"]
 
 TimesRow = tuple[str, int, int, int, str, int, int, int | None, int | None]
+LatencyRow = tuple[str, int, int, int, int]
+AvailabilityRow = tuple[str, int, float]
 
 
 class _TimedPathSolver(PathSolver):
@@ -165,7 +172,66 @@ def _random_stream(rng: random.Random, number: int, edge: list[Node], supervisor
     return stream, "up" if bottom_up else "down"
 
 
-async def _run(profile: FlexcurveSolverProfile, iteration: int, seed: int) -> list[TimesRow]:
+def _latency_ns(stream: Stream) -> int:
+    """Return the scheduled end-to-end latency, accounting for an interval boundary."""
+    first, last = stream.allocations[0], stream.allocations[-1]
+    window = stream.interval // TICK_GRANULARITY
+    latency_slots = (last.start_idx - first.start_idx) % window + last.num_slots
+    return latency_slots * TICK_GRANULARITY
+
+
+def _latency_row(profile: FlexcurveSolverProfile, iteration: int, insertion: int, stream: Stream) -> LatencyRow:
+    """Return a latency result row for a successfully inserted stream."""
+    return profile.value, iteration, insertion, stream.max_frame_size, _latency_ns(stream)
+
+
+def _contiguous_availability_percent(nodes: list[Node], total_slots: int) -> float:
+    """Return the mean largest free contiguous block across all port schedules as a percentage."""
+    largest_gaps = [
+        max((gap.num_slots for gap in port.gaps(total_slots)), default=0) for node in nodes for port in node.ports
+    ]
+    return 100 * sum(largest_gaps) / (len(largest_gaps) * total_slots)
+
+
+async def _persist_topology(topology: _Topology, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Persist the topology before running the churn workload."""
+    async with session_factory() as session:
+        network_repository = SqlaNetworkRepository(session)
+        for node in topology.nodes:
+            await network_repository.create_node(node)
+        for link in topology.links:
+            await network_repository.create_link(link)
+        await SqlaUnitOfWork(session).commit()
+
+
+def _update_topology_allocations(topology: _Topology, stream: Stream, operation: Literal["add", "remove"]) -> None:
+    """Add or remove a stream's allocations from the topology mirror."""
+    ports = {port.mac_address: port for node in topology.nodes for port in node.ports}
+    for allocation in stream.allocations:
+        if operation == "add":
+            ports[allocation.port_mac_address].allocations.append(allocation)
+        else:
+            ports[allocation.port_mac_address].allocations.remove(allocation)
+
+
+async def _remove_stream(
+    stream_id: StreamID,
+    topology: _Topology,
+    scheduled_streams: dict[StreamID, Stream],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Remove a stream from persistence and the topology mirror."""
+    async with session_factory() as session:
+        stream_repository = SqlaStreamRepository(session)
+        await RemoveStreamUseCase(stream_repository, SqlaUnitOfWork(session)).execute(stream_id)
+    _update_topology_allocations(topology, scheduled_streams.pop(stream_id), operation="remove")
+
+
+async def _run(
+    profile: FlexcurveSolverProfile,
+    iteration: int,
+    seed: int,
+) -> tuple[list[TimesRow], list[LatencyRow], AvailabilityRow]:
     """Run the insertions and removals of one iteration with a profile.
 
     Every operation uses its own session, as every API request does. Reusing one session would let it keep stale
@@ -182,15 +248,11 @@ async def _run(profile: FlexcurveSolverProfile, iteration: int, seed: int) -> li
     session_factory = create_session_factory(engine)
 
     times: list[TimesRow] = []
+    latencies: list[LatencyRow] = []
     active: list[StreamID] = []
+    scheduled_streams: dict[StreamID, Stream] = {}
     try:
-        async with session_factory() as session:
-            network_repository = SqlaNetworkRepository(session)
-            for node in topology.nodes:
-                await network_repository.create_node(node)
-            for link in topology.links:
-                await network_repository.create_link(link)
-            await SqlaUnitOfWork(session).commit()
+        await _persist_topology(topology, session_factory)
 
         insertions_left, removals_left = TOTAL_INSERTIONS, TOTAL_REMOVALS
         while insertions_left or removals_left:
@@ -200,9 +262,8 @@ async def _run(profile: FlexcurveSolverProfile, iteration: int, seed: int) -> li
             if remove:
                 index = rng.randrange(len(active))
                 active[index], active[-1] = active[-1], active[index]
-                async with session_factory() as session:
-                    stream_repository = SqlaStreamRepository(session)
-                    await RemoveStreamUseCase(stream_repository, SqlaUnitOfWork(session)).execute(active.pop())
+                stream_id = active.pop()
+                await _remove_stream(stream_id, topology, scheduled_streams, session_factory)
                 removals_left -= 1
                 continue
             if not insertions_left:
@@ -223,12 +284,15 @@ async def _run(profile: FlexcurveSolverProfile, iteration: int, seed: int) -> li
                     config,
                 )
                 try:
-                    await insert_stream.execute(stream)
+                    inserted_stream = await insert_stream.execute(stream)
                 except StreamUnfeasibleError:
                     feasible = 0
                 else:
                     feasible = 1
                     active.append(stream.id)
+                    scheduled_streams[stream.id] = inserted_stream
+                    _update_topology_allocations(topology, inserted_stream, operation="add")
+                    latencies.append(_latency_row(profile, iteration, number, inserted_stream))
             times.append(
                 (
                     profile.value,
@@ -246,7 +310,8 @@ async def _run(profile: FlexcurveSolverProfile, iteration: int, seed: int) -> li
     finally:
         await engine.dispose()
 
-    return times
+    availability = (profile.value, iteration, _contiguous_availability_percent(topology.nodes, config.total_slots))
+    return times, latencies, availability
 
 
 def _write_csv(path: Path, header: Sequence[str], rows: Sequence[Sequence[object]]) -> None:
@@ -259,12 +324,16 @@ def _write_csv(path: Path, header: Sequence[str], rows: Sequence[Sequence[object
 async def main(output_dir: Path, iterations: int, seed: int) -> None:
     """Run the benchmark for the minimum latency profile first and then for the maximum throughput one."""
     times: list[TimesRow] = []
+    latencies: list[LatencyRow] = []
+    availabilities: list[AvailabilityRow] = []
     unfeasible_counts: list[tuple[str, int, int, int]] = []
     for profile in (FlexcurveSolverProfile.MIN_LATENCY, FlexcurveSolverProfile.MAX_THROUGHPUT):
         for iteration in range(1, iterations + 1):
             # Both profiles replay the same workload on each iteration
-            iteration_times = await _run(profile, iteration, seed + iteration)
+            iteration_times, iteration_latencies, availability = await _run(profile, iteration, seed + iteration)
             times.extend(iteration_times)
+            latencies.extend(iteration_latencies)
+            availabilities.append(availability)
             unfeasible = sum(1 for row in iteration_times if not row[6])
             unfeasible_counts.append((profile.value, iteration, len(iteration_times), unfeasible))
             solving_ms = sum((row[7] or 0) + (row[8] or 0) for row in iteration_times) / 1e6
@@ -274,10 +343,14 @@ async def main(output_dir: Path, iterations: int, seed: int) -> None:
             )
 
     times_path = output_dir / "flexcurve_spine_leaf_churn_times.csv"
+    latencies_path = output_dir / "flexcurve_spine_leaf_churn_latencies.csv"
+    availability_path = output_dir / "flexcurve_spine_leaf_churn_availability.csv"
     unfeasible_path = output_dir / "flexcurve_spine_leaf_churn_unfeasible.csv"
     _write_csv(times_path, TIMES_HEADER, times)
+    _write_csv(latencies_path, LATENCIES_HEADER, latencies)
+    _write_csv(availability_path, AVAILABILITY_HEADER, availabilities)
     _write_csv(unfeasible_path, UNFEASIBLE_HEADER, unfeasible_counts)
-    print(f"Results saved to {times_path} and {unfeasible_path}")
+    print(f"Results saved to {times_path}, {latencies_path}, {availability_path}, and {unfeasible_path}")
 
 
 if __name__ == "__main__":
