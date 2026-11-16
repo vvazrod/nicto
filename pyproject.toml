@@ -12,6 +12,8 @@ authors = [
     { name = "Begoña del Pino", email = "bpino@ugr.es" }
 ]
 requires-python = ">=3.12"
+license = "EUPL-1.2"
+license-files = ["LICENCE"]
 dependencies = [
     "aiofiles>=24.0.0",
     "aiosqlite>=0.22.1",
